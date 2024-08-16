@@ -3,10 +3,11 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Oct 25, 2023 at 02:39 AM
+-- Generation Time: Aug 16, 2024 at 08:54 PM
 -- Server version: 8.0.20-0ubuntu0.19.10.1
 -- PHP Version: 7.3.11-0ubuntu0.19.10.6
 
+SET FOREIGN_KEY_CHECKS=0;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
@@ -18,14 +19,14 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `web66_65011212122`
+-- Database: `PizzaShopDB`
 --
 
 DELIMITER $$
 --
 -- Procedures
 --
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `add_item_into_cart` (IN `p_order_id` INT, IN `pizza_variation_id` INT, IN `p_quantity` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `add_item_into_cart` (IN `p_order_id` INT, IN `pizza_variation_id` INT, IN `p_quantity` INT)  BEGIN
     DECLARE is_error INT DEFAULT 1;
 
     -- Check if the item already exists in the cart
@@ -39,7 +40,7 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `add_item_into_cart` (IN `p_ord
         SET is_error = 0;
     END IF;
 
-    CALL update_order_total(p_order_id);
+    CALL update_order_total(p_order_id, 0);
 
     IF is_error = 0 THEN
         SELECT 'success' AS status;
@@ -48,13 +49,13 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `add_item_into_cart` (IN `p_ord
     END IF;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `Checkout` (IN `p_user_id` INT, IN `p_order_id` INT, IN `p_paymentMethod` VARCHAR(255), IN `p_name` VARCHAR(255), IN `p_phone` VARCHAR(255), IN `p_address` VARCHAR(255))  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `Checkout` (IN `p_user_id` INT, IN `p_order_id` INT, IN `p_paymentMethod` VARCHAR(255), IN `p_name` VARCHAR(255), IN `p_phone` VARCHAR(255), IN `p_address` VARCHAR(255), IN `deliver_cost` INT)  BEGIN
     DECLARE v_wallet INT;
     DECLARE v_total_price INT;
     DECLARE v_is_error INT DEFAULT 0;
 
     -- update total
-    CALL update_order_total(p_order_id);
+    CALL update_order_total(p_order_id, deliver_cost);
 
     -- Get user's wallet balance
     SELECT wallet INTO v_wallet FROM users WHERE user_id = p_user_id limit 1;
@@ -80,8 +81,11 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `Checkout` (IN `p_user_id` INT,
 
     -- Update order with receiver information
     UPDATE orders
-    SET receiver_name = p_name, receiver_address = p_address, receiver_phone = p_phone
+    SET receiver_name = p_name, 
+        receiver_address = CONCAT('ที่อยู่: ', p_address), 
+        receiver_phone = CONCAT('เบอร์โทร: ', p_phone)
     WHERE order_id = p_order_id;
+
 
     -- updateTime
     CALL update_order_time(p_order_id);
@@ -90,7 +94,7 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `Checkout` (IN `p_user_id` INT,
     SELECT v_is_error limit 1;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `create_new_order` (IN `p_user_id` INT, OUT `p_new_order_id` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `create_new_order` (IN `p_user_id` INT, OUT `p_new_order_id` INT)  BEGIN
   -- Initialize p_new_order_id with a default value of 0
   SET p_new_order_id = 0;
 
@@ -103,7 +107,7 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `create_new_order` (IN `p_user_
   SET p_new_order_id = LAST_INSERT_ID();
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `generate_and_update_pizza_variations` (IN `pizza_id` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `generate_and_update_pizza_variations` (IN `pizza_id` INT)  BEGIN
   DECLARE size_multiplier DECIMAL(5, 2);
   DECLARE crust_multiplier DECIMAL(5, 2);
   DECLARE pizza_base_price DECIMAL(10, 2);
@@ -156,7 +160,7 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `generate_and_update_pizza_vari
   END WHILE;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `GetCart` (IN `p_order_id` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `GetCart` (IN `p_order_id` INT)  BEGIN
     DECLARE cart_exists INT DEFAULT 0;
 
     -- Check if the user's cart exists and has status '0'
@@ -186,7 +190,7 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `GetCart` (IN `p_order_id` INT)
     END IF;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `GetItemCount` (IN `p_order_id` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `GetItemCount` (IN `p_order_id` INT)  BEGIN
     DECLARE variation_count INT DEFAULT -1;
     DECLARE result_status VARCHAR(255);
     DECLARE result_message VARCHAR(255);
@@ -207,21 +211,21 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `GetItemCount` (IN `p_order_id`
             , variation_count AS item_count;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `MostSoldPizza` ()  NO SQL
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `MostSoldPizza` ()  NO SQL
 SELECT pv.pizza_id, SUM(oi.quantity) AS total_sold
     FROM order_items oi
     INNER JOIN pizza_variations pv ON oi.variation_id = pv.variation_id
     GROUP BY pv.pizza_id
     ORDER BY total_sold DESC$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `Pay` (IN `p_user_id` INT, IN `p_order_id` INT)  NO SQL
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `Pay` (IN `p_user_id` INT, IN `p_order_id` INT, IN `deliver_cost` INT)  NO SQL
 BEGIN
     DECLARE v_wallet INT;
     DECLARE v_total_price INT;
     DECLARE v_is_error INT DEFAULT 0;
 
     -- update total
-    CALL update_order_total(p_order_id);
+    CALL update_order_total(p_order_id, deliver_cost);
 
     -- Get user's wallet balance
     SELECT wallet INTO v_wallet FROM users WHERE user_id = p_user_id limit 1;
@@ -248,7 +252,7 @@ BEGIN
     SELECT v_is_error limit 1;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `update_order_time` (IN `p_order_id` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `update_order_time` (IN `p_order_id` INT)  BEGIN
     DECLARE old_order_status VARCHAR(255);
     
     -- Get the old order_status
@@ -258,7 +262,7 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `update_order_time` (IN `p_orde
         UPDATE orders SET order_time = CURRENT_TIMESTAMP() WHERE order_id = p_order_id;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `update_order_total` (IN `calc_to_order_id` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `update_order_total` (IN `calc_to_order_id` INT, IN `deliver_cost` INT)  BEGIN
   DECLARE order_total INT DEFAULT 0;
 
   -- Calculate the total price for the order
@@ -270,11 +274,11 @@ CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `update_order_total` (IN `calc_
 
   -- Update the total_price in the orders table
   UPDATE orders
-  SET total_price = order_total
+  SET total_price = order_total + deliver_cost
   WHERE order_id = calc_to_order_id;
 END$$
 
-CREATE DEFINER=`web66_65011212122`@`%` PROCEDURE `user_active_order` (IN `userID` INT)  BEGIN
+CREATE DEFINER=`PizzaShopDB`@`%` PROCEDURE `user_active_order` (IN `userID` INT)  BEGIN
   DECLARE temp_order_id INT;
   DECLARE orderID INT;
 
@@ -316,7 +320,7 @@ CREATE TABLE `orders` (
   `total_price` int NOT NULL DEFAULT '0',
   `receiver_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `receiver_address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
-  `receiver_phone` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL
+  `receiver_phone` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -338,7 +342,7 @@ INSERT INTO `orders` (`order_id`, `user_id`, `order_status`, `order_time`, `tota
 (12, 1, '1', '2023-10-02 05:09:41', 6548, 'john', 'TEST', '1234657981'),
 (13, 1, '2', '2023-10-20 17:18:59', 1015, 'john', 'deasdasdasd', '1234657981'),
 (14, 1, '3', '2023-10-21 12:16:00', 556, 'john', 'deasdasdasd', '1234657981'),
-(15, 3, '1', '2023-10-24 14:23:30', 358, '99', '99', '99'),
+(15, 3, '2', '2023-10-30 23:46:48', 358, '99', '99', '99'),
 (16, 3, '2', '2023-10-24 16:38:06', 5570, '1', '1', '1'),
 (24, 3, '2', '2023-10-24 16:12:14', 1780, 'pae', 'xxxxxxxxxxxxxxxxxxxxxxx', '1111111111'),
 (25, 1, '2', '2023-10-24 17:44:16', 918, 'john', 'deasdasdasd', '1234657981'),
@@ -352,10 +356,19 @@ INSERT INTO `orders` (`order_id`, `user_id`, `order_status`, `order_time`, `tota
 (34, 1, '2', '2023-10-24 17:49:55', 481, 'john', 'deasdasdasd', '1234657981'),
 (35, 1, '2', '2023-10-24 17:54:01', 3100, 'john', 'deasdasdasd', '1234657981'),
 (36, 1, '1', '2023-10-24 19:11:42', 423, 'john', 'deasdasdasd', '1234657981'),
-(37, 3, '0', '2023-10-24 17:57:25', 448, NULL, NULL, NULL),
+(37, 3, '2', '2023-10-30 23:42:28', 4270, 'pae', '111111111111', '1324657891'),
 (38, 1, '1', '2023-10-24 19:18:42', 4083, 'john', 'deasdasdasd', '1234657981'),
 (39, 1, '2', '2023-10-24 19:19:04', 279, 'john', 'deasdasdasd', '1234657981'),
-(40, 1, '0', '2023-10-24 19:19:04', 0, NULL, NULL, NULL);
+(40, 1, '3', '2023-10-30 23:36:09', 671, 'john', 'deasdasdasd', '1234657981'),
+(41, 1, '2', '2024-08-16 12:54:08', 194, 'john', 'ที่อยู่: deasdasdasd', 'เบอร์โทร: 1234657981'),
+(42, 3, '1', '2023-10-30 23:44:54', 242, 'pae', '111111111111', '1324657891'),
+(43, 3, '2', '2023-10-31 02:33:35', 214, 'pae', '111', '1324657891'),
+(44, 3, '2', '2023-10-31 02:39:47', 392, 'pae', '1111', '0123465789'),
+(45, 3, '2', '2023-10-31 02:46:06', 214, 'pae', 'Address: 1111', 'Phone: 0123465789'),
+(46, 3, '2', '2023-10-31 02:46:50', 294, 'pae', 'ที่อยู่: 1111', 'เบอร์โทร: 0123465789'),
+(47, 3, '3', '2023-10-31 03:12:17', 1609, 'XXX', 'ที่อยู่: AAAAA', 'เบอร์โทร: 1234567980'),
+(48, 3, '0', '2023-10-31 03:12:18', 0, NULL, NULL, NULL),
+(49, 1, '0', '2024-08-16 12:54:08', 0, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -452,7 +465,18 @@ INSERT INTO `order_items` (`order_item_id`, `order_id`, `variation_id`, `quantit
 (89, 38, 37, 12),
 (90, 38, 1, 2),
 (91, 38, 38, 1),
-(92, 39, 133, 1);
+(92, 39, 133, 1),
+(93, 40, 8, 1),
+(94, 40, 9, 1),
+(95, 37, 1, 20),
+(96, 42, 14, 1),
+(97, 43, 25, 1),
+(98, 44, 38, 1),
+(99, 45, 25, 1),
+(100, 46, 37, 1),
+(101, 47, 37, 5),
+(102, 47, 25, 1),
+(103, 41, 1, 1);
 
 -- --------------------------------------------------------
 
@@ -792,7 +816,7 @@ CREATE TABLE `users` (
   `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
   `password` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
   `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `phone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `phone` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `address` text COLLATE utf8mb4_general_ci,
   `role` enum('admin','customer') COLLATE utf8mb4_general_ci NOT NULL,
   `wallet` int NOT NULL
@@ -801,11 +825,11 @@ CREATE TABLE `users` (
 --
 -- Dumping data for table `users`
 --
-
+-- Password: 1234
 INSERT INTO `users` (`user_id`, `email`, `password`, `name`, `phone`, `address`, `role`, `wallet`) VALUES
-(1, 'john@example.com', '$2y$10$SD.Di58fQ.vV4AO6P9Zxf.3Lz6ImQsjEXA3H18fa0Cy3sv6gd3hqy', 'john', '1234657981', 'deasdasdasd', 'customer', 4307),
+(1, 'john@example.com', '$2y$10$SD.Di58fQ.vV4AO6P9Zxf.3Lz6ImQsjEXA3H18fa0Cy3sv6gd3hqy', 'john', '1234657981', 'deasdasdasd', 'customer', 3442),
 (2, 'jane@example.com', '$2y$10$SD.Di58fQ.vV4AO6P9Zxf.3Lz6ImQsjEXA3H18fa0Cy3sv6gd3hqy', 'jane', '1234567890', '2', 'admin', 0),
-(3, 'pae@example.com', '$2y$10$SD.Di58fQ.vV4AO6P9Zxf.3Lz6ImQsjEXA3H18fa0Cy3sv6gd3hqy', 'pae', '321321', '111', 'customer', 820970646);
+(3, 'pae@example.com', '$2y$10$SD.Di58fQ.vV4AO6P9Zxf.3Lz6ImQsjEXA3H18fa0Cy3sv6gd3hqy', 'XXX', '1234567980', 'AAAAA', 'customer', 820957093);
 
 --
 -- Indexes for dumped tables
@@ -868,13 +892,13 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `order_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
+  MODIFY `order_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=50;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `order_item_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=93;
+  MODIFY `order_item_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=104;
 
 --
 -- AUTO_INCREMENT for table `pizzas`
@@ -930,6 +954,7 @@ ALTER TABLE `pizza_variations`
   ADD CONSTRAINT `pizza_variations_ibfk_1` FOREIGN KEY (`pizza_id`) REFERENCES `pizzas` (`pizza_id`),
   ADD CONSTRAINT `pizza_variations_ibfk_2` FOREIGN KEY (`size_id`) REFERENCES `pizza_sizes` (`size_id`),
   ADD CONSTRAINT `pizza_variations_ibfk_3` FOREIGN KEY (`crust_id`) REFERENCES `pizza_crusts` (`crust_id`);
+SET FOREIGN_KEY_CHECKS=1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
